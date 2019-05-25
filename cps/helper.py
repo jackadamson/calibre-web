@@ -19,8 +19,6 @@
 #  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 
-import db
-import ub
 from flask import current_app as app
 from tempfile import gettempdir
 import sys
@@ -28,7 +26,6 @@ import io
 import os
 import re
 import unicodedata
-import worker
 import time
 from flask import send_from_directory, make_response, redirect, abort
 from flask_babel import gettext as _
@@ -37,25 +34,20 @@ from babel.dates import format_datetime
 from datetime import datetime
 import shutil
 import requests
+
 try:
     import gdriveutils as gd
 except ImportError:
     pass
-import web
 import random
 import subprocess
+from cps import db, worker, web
+from cps.models import ub
+import unidecode
+from PIL import Image
 
-try:
-    import unidecode
-    use_unidecode = True
-except ImportError:
-    use_unidecode = False
-
-try:
-    from PIL import Image
-    use_PIL = True
-except ImportError:
-    use_PIL = False
+use_unidecode = True
+use_PIL = True
 
 # Global variables
 # updater_thread = None
@@ -64,6 +56,12 @@ global_WorkerThread.start()
 
 
 def update_download(book_id, user_id):
+    """
+    TODO: Workout what this function does
+    :param book_id:
+    :param user_id:
+    :return:
+    """
     check = ub.session.query(ub.Downloads).filter(ub.Downloads.user_id == user_id).filter(ub.Downloads.book_id ==
                                                                                           book_id).first()
     if not check:
@@ -71,8 +69,18 @@ def update_download(book_id, user_id):
         ub.session.add(new_download)
         ub.session.commit()
 
-# Convert existing book entry to new format
+
 def convert_book_format(book_id, calibrepath, old_book_format, new_book_format, user_id, kindle_mail=None):
+    """
+    Convert existing book entry to new format
+    :param book_id:
+    :param calibrepath:
+    :param old_book_format:
+    :param new_book_format:
+    :param user_id:
+    :param kindle_mail:
+    :return:
+    """
     book = db.session.query(db.Books).filter(db.Books.id == book_id).first()
     data = db.session.query(db.Data).filter(db.Data.book == book.id).filter(db.Data.format == old_book_format).first()
     if not data:
@@ -95,7 +103,7 @@ def convert_book_format(book_id, calibrepath, old_book_format, new_book_format, 
         # read settings and append converter task to queue
         if kindle_mail:
             settings = ub.get_mail_settings()
-            settings['subject'] = _('Send to Kindle') # pretranslate Subject for e-mail
+            settings['subject'] = _('Send to Kindle')  # pretranslate Subject for e-mail
             settings['body'] = _(u'This e-mail has been sent via Calibre-Web.')
             # text = _(u"%(format)s: %(book)s", format=new_book_format, book=book.title)
         else:
@@ -107,12 +115,12 @@ def convert_book_format(book_id, calibrepath, old_book_format, new_book_format, 
         return None
     else:
         error_message = _(u"%(format)s not found: %(fn)s",
-                        format=old_book_format, fn=data.name + "." + old_book_format.lower())
+                          format=old_book_format, fn=data.name + "." + old_book_format.lower())
         return error_message
 
 
 def send_test_mail(kindle_mail, user_name):
-    global_WorkerThread.add_email(_(u'Calibre-Web test e-mail'),None, None, ub.get_mail_settings(),
+    global_WorkerThread.add_email(_(u'Calibre-Web test e-mail'), None, None, ub.get_mail_settings(),
                                   kindle_mail, user_name, _(u"Test e-mail"),
                                   _(u'This e-mail has been sent via Calibre-Web.'))
     return
@@ -129,45 +137,49 @@ def send_registration_mail(e_mail, user_name, default_password, resend=False):
     text += "Don't forget to change your password after first login.\r\n"
     text += "Sincerely\r\n\r\n"
     text += "Your Calibre-Web team"
-    global_WorkerThread.add_email(_(u'Get Started with Calibre-Web'),None, None, ub.get_mail_settings(),
+    global_WorkerThread.add_email(_(u'Get Started with Calibre-Web'), None, None, ub.get_mail_settings(),
                                   e_mail, None, _(u"Registration e-mail for user: %(name)s", name=user_name), text)
     return
 
+
 def check_send_to_kindle(entry):
     """
-        returns all available book formats for sending to Kindle
+    returns all available book formats for sending to Kindle
+    :param entry:
+    :return:
     """
     if len(entry.data):
-        bookformats=list()
+        bookformats = list()
         if ub.config.config_ebookconverter == 0:
             # no converter - only for mobi and pdf formats
             for ele in iter(entry.data):
                 if 'MOBI' in ele.format:
-                    bookformats.append({'format':'Mobi','convert':0,'text':_('Send %(format)s to Kindle',format='Mobi')})
+                    bookformats.append(
+                        {'format': 'Mobi', 'convert': 0, 'text': _('Send %(format)s to Kindle', format='Mobi')})
                 if 'PDF' in ele.format:
-                    bookformats.append({'format':'Pdf','convert':0,'text':_('Send %(format)s to Kindle',format='Pdf')})
+                    bookformats.append(
+                        {'format': 'Pdf', 'convert': 0, 'text': _('Send %(format)s to Kindle', format='Pdf')})
                 if 'AZW' in ele.format:
-                    bookformats.append({'format':'Azw','convert':0,'text':_('Send %(format)s to Kindle',format='Azw')})
-                '''if 'AZW3' in ele.format:
-                    bookformats.append({'format':'Azw3','convert':0,'text':_('Send %(format)s to Kindle',format='Azw3')})'''
+                    bookformats.append(
+                        {'format': 'Azw', 'convert': 0, 'text': _('Send %(format)s to Kindle', format='Azw')})
         else:
             formats = list()
             for ele in iter(entry.data):
                 formats.append(ele.format)
             if 'MOBI' in formats:
-                bookformats.append({'format': 'Mobi','convert':0,'text':_('Send %(format)s to Kindle',format='Mobi')})
+                bookformats.append(
+                    {'format': 'Mobi', 'convert': 0, 'text': _('Send %(format)s to Kindle', format='Mobi')})
             if 'AZW' in formats:
-                bookformats.append({'format': 'Azw','convert':0,'text':_('Send %(format)s to Kindle',format='Azw')})
+                bookformats.append(
+                    {'format': 'Azw', 'convert': 0, 'text': _('Send %(format)s to Kindle', format='Azw')})
             if 'PDF' in formats:
-                bookformats.append({'format': 'Pdf','convert':0,'text':_('Send %(format)s to Kindle',format='Pdf')})
+                bookformats.append(
+                    {'format': 'Pdf', 'convert': 0, 'text': _('Send %(format)s to Kindle', format='Pdf')})
             if ub.config.config_ebookconverter >= 1:
                 if 'EPUB' in formats and not 'MOBI' in formats:
-                    bookformats.append({'format': 'Mobi','convert':1,
-                            'text':_('Convert %(orig)s to %(format)s and send to Kindle',orig='Epub',format='Mobi')})
-            '''if ub.config.config_ebookconverter == 2:
-                if 'EPUB' in formats and not 'AZW3' in formats:
-                    bookformats.append({'format': 'Azw3','convert':1,
-                            'text':_('Convert %(orig)s to %(format)s and send to Kindle',orig='Epub',format='Azw3')})'''
+                    bookformats.append({'format': 'Mobi', 'convert': 1,
+                                        'text': _('Convert %(orig)s to %(format)s and send to Kindle', orig='Epub',
+                                                  format='Mobi')})
         return bookformats
     else:
         app.logger.error(u'Cannot find book entry %d', entry.id)
@@ -177,6 +189,12 @@ def check_send_to_kindle(entry):
 # Check if a reader is existing for any of the book formats, if not, return empty list, otherwise return
 # list with supported formats
 def check_read_formats(entry):
+    """
+    Check if a reader is existing for any of the book formats, if not, return empty list, otherwise return
+    list with supported formats
+    :param entry:
+    :return:
+    """
     EXTENSIONS_READER = {'TXT', 'PDF', 'EPUB', 'CBZ', 'CBT', 'CBR'}
     bookformats = list()
     if len(entry.data):
@@ -191,7 +209,16 @@ def check_read_formats(entry):
 # 2: If Epub file is existing, it's converted and send to kindle email,
 # 3: If Pdf file is existing, it's directly send to kindle email
 def send_mail(book_id, book_format, convert, kindle_mail, calibrepath, user_id):
-    """Send email with attachments"""
+    """
+    Send email with attachments
+    :param book_id:
+    :param book_format:
+    :param convert:
+    :param kindle_mail:
+    :param calibrepath:
+    :param user_id:
+    :return:
+    """
     book = db.session.query(db.Books).filter(db.Books.id == book_id).first()
 
     if convert:
@@ -202,8 +229,8 @@ def send_mail(book_id, book_format, convert, kindle_mail, calibrepath, user_id):
             if entry.format.upper() == book_format.upper():
                 result = entry.name + '.' + book_format.lower()
                 global_WorkerThread.add_email(_(u"Send to Kindle"), book.path, result, ub.get_mail_settings(),
-                                      kindle_mail, user_id, _(u"E-mail: %(book)s", book=book.title),
-                                      _(u'This e-mail has been sent via Calibre-Web.'))
+                                              kindle_mail, user_id, _(u"E-mail: %(book)s", book=book.title),
+                                              _(u'This e-mail has been sent via Calibre-Web.'))
                 return
         return _(u"The requested file could not be read. Maybe wrong permissions?")
 
@@ -214,19 +241,9 @@ def get_valid_filename(value, replace_whitespace=True):
     filename. Limits num characters to 128 max.
     """
     if value[-1:] == u'.':
-        value = value[:-1]+u'_'
+        value = value[:-1] + u'_'
     value = value.replace("/", "_").replace(":", "_").strip('\0')
-    if use_unidecode:
-        value = (unidecode.unidecode(value)).strip()
-    else:
-        value = value.replace(u'§', u'SS')
-        value = value.replace(u'ß', u'ss')
-        value = unicodedata.normalize('NFKD', value)
-        re_slugify = re.compile('[\W\s-]', re.UNICODE)
-        if isinstance(value, str):  # Python3 str, Python2 unicode
-            value = re_slugify.sub('', value).strip()
-        else:
-            value = unicode(re_slugify.sub('', value).strip())
+    value = (unidecode.unidecode(value)).strip()
     if replace_whitespace:
         #  *+:\"/<>? are replaced by _
         value = re.sub(r'[\*\+:\\\"/<>\?]+', u'_', value, flags=re.U)
@@ -244,7 +261,7 @@ def get_valid_filename(value, replace_whitespace=True):
 def get_sorted_author(value):
     try:
         if ',' not in value:
-            regexes = ["^(JR|SR)\.?$", "^I{1,3}\.?$", "^IV\.?$"]
+            regexes = [r"^(JR|SR)\.?$", r"^I{1,3}\.?$", r"^IV\.?$"]
             combined = "(" + ")|(".join(regexes) + ")"
             value = value.split(" ")
             if re.match(combined, value[-1].upper()):
@@ -268,7 +285,7 @@ def delete_book_file(book, calibrepath, book_format=None):
         path = os.path.join(calibrepath, book.path)
         if book_format:
             for file in os.listdir(path):
-                if file.upper().endswith("."+book_format):
+                if file.upper().endswith("." + book_format):
                     os.remove(os.path.join(path, file))
         else:
             if os.path.isdir(path):
@@ -361,9 +378,9 @@ def update_dir_structure_gdrive(book_id, first_author):
             gFile.Upload()
             book.path = book.path.split('/')[0] + u'/' + new_titledir
             path = book.path
-            gd.updateDatabaseOnEdit(gFile['id'], book.path)     # only child folder affected
+            gd.updateDatabaseOnEdit(gFile['id'], book.path)  # only child folder affected
         else:
-            error = _(u'File %(file)s not found on Google Drive', file=book.path) # file not found
+            error = _(u'File %(file)s not found on Google Drive', file=book.path)  # file not found
 
     if authordir != new_authordir:
         gFile = gd.getFileFromEbooksFolder(os.path.dirname(book.path), new_titledir)
@@ -373,7 +390,7 @@ def update_dir_structure_gdrive(book_id, first_author):
             path = book.path
             gd.updateDatabaseOnEdit(gFile['id'], book.path)
         else:
-            error = _(u'File %(file)s not found on Google Drive', file=authordir) # file not found
+            error = _(u'File %(file)s not found on Google Drive', file=authordir)  # file not found
     # Rename all files from old names to new names
 
     if authordir != new_authordir or titledir != new_titledir:
@@ -389,7 +406,7 @@ def update_dir_structure_gdrive(book_id, first_author):
 
 
 def delete_book_gdrive(book, book_format):
-    error= False
+    error = False
     if book_format:
         name = ''
         for entry in book.data:
@@ -397,23 +414,24 @@ def delete_book_gdrive(book, book_format):
                 name = entry.name + '.' + book_format
         gFile = gd.getFileFromEbooksFolder(book.path, name)
     else:
-        gFile = gd.getFileFromEbooksFolder(os.path.dirname(book.path),book.path.split('/')[1])
+        gFile = gd.getFileFromEbooksFolder(os.path.dirname(book.path), book.path.split('/')[1])
     if gFile:
         gd.deleteDatabaseEntry(gFile['id'])
         gFile.Trash()
     else:
-        error =_(u'Book path %(path)s not found on Google Drive', path=book.path)  # file not found
+        error = _(u'Book path %(path)s not found on Google Drive', path=book.path)  # file not found
     return error
 
 
 def generate_random_password():
     s = "abcdefghijklmnopqrstuvwxyz01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%&*()?"
     passlen = 8
-    return "".join(random.sample(s,passlen ))
+    return "".join(random.sample(s, passlen))
 
-################################## External interface
 
-def update_dir_stucture(book_id, calibrepath, first_author = None):
+# External interface
+
+def update_dir_stucture(book_id, calibrepath, first_author=None):
     if ub.config.config_use_google_drive:
         return update_dir_structure_gdrive(book_id, first_author)
     else:
@@ -432,7 +450,7 @@ def get_book_cover(cover_path):
         try:
             if not web.is_gdrive_ready():
                 return send_from_directory(os.path.join(os.path.dirname(__file__), "static"), "generic_cover.jpg")
-            path=gd.get_cover_via_gdrive(cover_path)
+            path = gd.get_cover_via_gdrive(cover_path)
             if path:
                 return redirect(path)
             else:
@@ -442,7 +460,7 @@ def get_book_cover(cover_path):
             web.app.logger.error("Error Message: " + e.message)
             web.app.logger.exception(e)
             # traceback.print_exc()
-            return send_from_directory(os.path.join(os.path.dirname(__file__), "static"),"generic_cover.jpg")
+            return send_from_directory(os.path.join(os.path.dirname(__file__), "static"), "generic_cover.jpg")
     else:
         return send_from_directory(os.path.join(ub.config.config_calibre_dir, cover_path), "cover.jpg")
 
@@ -454,7 +472,7 @@ def save_cover_from_url(url, book_path):
 
 
 def save_cover_from_filestorage(filepath, saved_filename, img):
-    if hasattr(img,'_content'):
+    if hasattr(img, '_content'):
         f = open(os.path.join(filepath, saved_filename), "wb")
         f.write(img._content)
         f.close()
@@ -487,7 +505,7 @@ def save_cover(img, book_path):
             return False
         # convert to jpg because calibre only supports jpg
         if content_type in ('image/png', 'image/webp'):
-            if hasattr(img,'stream'):
+            if hasattr(img, 'stream'):
                 imgc = Image.open(img.stream)
             else:
                 imgc = Image.open(io.BytesIO(img.content))
@@ -513,7 +531,6 @@ def save_cover(img, book_path):
         return save_cover_from_filestorage(os.path.join(ub.config.config_calibre_dir, book_path), "cover.jpg", img)
 
 
-
 def do_download_file(book, book_format, data, headers):
     if ub.config.config_use_google_drive:
         startTime = time.time()
@@ -526,51 +543,56 @@ def do_download_file(book, book_format, data, headers):
     else:
         filename = os.path.join(ub.config.config_calibre_dir, book.path)
         if not os.path.isfile(os.path.join(filename, data.name + "." + book_format)):
-            # ToDo: improve error handling
+            # TODO: improve error handling
             web.app.logger.error('File not found: %s' % os.path.join(filename, data.name + "." + book_format))
         response = make_response(send_from_directory(filename, data.name + "." + book_format))
         response.headers = headers
         return response
 
+
 ##################################
 
 
-
-def check_unrar(unrarLocation):
+def check_unrar(unrar_location):
     error = False
-    if os.path.exists(unrarLocation):
+    if os.path.exists(unrar_location):
         try:
             if sys.version_info < (3, 0):
-                unrarLocation = unrarLocation.encode(sys.getfilesystemencoding())
-            p = subprocess.Popen(unrarLocation, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                unrar_location = unrar_location.encode(sys.getfilesystemencoding())
+            p = subprocess.Popen(unrar_location, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             p.wait()
             for lines in p.stdout.readlines():
                 if isinstance(lines, bytes):
                     lines = lines.decode('utf-8')
-                value=re.search('UNRAR (.*) freeware', lines)
+                value = re.search('UNRAR (.*) freeware', lines)
                 if value:
                     version = value.group(1)
         except OSError as e:
             error = True
             web.app.logger.exception(e)
-            version =_(u'Error excecuting UnRar')
+            version = _(u'Error excecuting UnRar')
     else:
         version = _(u'Unrar binary file not found')
-        error=True
-    return (error, version)
-
+        error = True
+    return error, version
 
 
 def json_serial(obj):
-    """JSON serializer for objects not serializable by default json code"""
+    """
+    JSON serializer for objects not serializable by default json code
+    :param obj: object
+    :return: A json representation of the object
+    :raises: TypeError
+    """
 
     if isinstance(obj, (datetime)):
         return obj.isoformat()
-    raise TypeError ("Type %s not serializable" % type(obj))
+    raise TypeError("Type %s not serializable" % type(obj))
+
 
 # helper function to apply localize status information in tasklist entries
 def render_task_status(tasklist):
-    renderedtasklist=list()
+    renderedtasklist = list()
     for task in tasklist:
         if task['user'] == current_user.nickname or current_user.role_admin():
             if task['formStarttime']:
@@ -580,7 +602,7 @@ def render_task_status(tasklist):
                     task['starttime'] = ""
 
             # localize the task status
-            if isinstance( task['stat'], int ):
+            if isinstance(task['stat'], int):
                 if task['stat'] == worker.STAT_WAITING:
                     task['status'] = _(u'Waiting')
                 elif task['stat'] == worker.STAT_FAIL:
@@ -593,14 +615,14 @@ def render_task_status(tasklist):
                     task['status'] = _(u'Unknown Status')
 
             # localize the task type
-            if isinstance( task['taskType'], int ):
+            if isinstance(task['taskType'], int):
                 if task['taskType'] == worker.TASK_EMAIL:
                     task['taskMessage'] = _(u'E-mail: ') + task['taskMess']
-                elif  task['taskType'] == worker.TASK_CONVERT:
+                elif task['taskType'] == worker.TASK_CONVERT:
                     task['taskMessage'] = _(u'Convert: ') + task['taskMess']
-                elif  task['taskType'] == worker.TASK_UPLOAD:
+                elif task['taskType'] == worker.TASK_UPLOAD:
                     task['taskMessage'] = _(u'Upload: ') + task['taskMess']
-                elif  task['taskType'] == worker.TASK_CONVERT_ANY:
+                elif task['taskType'] == worker.TASK_CONVERT_ANY:
                     task['taskMessage'] = _(u'Convert: ') + task['taskMess']
                 else:
                     task['taskMessage'] = _(u'Unknown Task: ') + task['taskMess']

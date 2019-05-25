@@ -10,12 +10,7 @@ sys.path.append(base_path)
 sys.path.append(os.path.join(base_path, 'cps'))
 sys.path.append(os.path.join(base_path, 'vendor'))
 
-from cps.server import Server
+from cps.server import server
 
 if __name__ == '__main__':
-    Server.startServer()
-
-
-
-
-
+    server.startServer()

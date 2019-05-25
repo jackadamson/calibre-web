@@ -22,26 +22,26 @@ from socket import error as SocketError
 import sys
 import os
 import signal
-import web
+from cps import web
 
 try:
     from gevent.pywsgi import WSGIServer
     from gevent.pool import Pool
     from gevent import __version__ as geventVersion
+
     gevent_present = True
 except ImportError:
     from tornado.wsgi import WSGIContainer
     from tornado.httpserver import HTTPServer
     from tornado.ioloop import IOLoop
     from tornado import version as tornadoVersion
+
     gevent_present = False
 
 
-
-class server:
-
+class Server:
     wsgiserver = None
-    restart= False
+    restart = False
 
     def __init__(self):
         signal.signal(signal.SIGINT, self.killServer)
@@ -50,16 +50,19 @@ class server:
     def start_gevent(self):
         try:
             ssl_args = dict()
-            certfile_path   = web.ub.config.get_config_certfile()
-            keyfile_path    = web.ub.config.get_config_keyfile()
+            certfile_path = web.ub.config.get_config_certfile()
+            keyfile_path = web.ub.config.get_config_keyfile()
             if certfile_path and keyfile_path:
                 if os.path.isfile(certfile_path) and os.path.isfile(keyfile_path):
                     ssl_args = {"certfile": certfile_path,
                                 "keyfile": keyfile_path}
                 else:
-                    web.app.logger.info('The specified paths for the ssl certificate file and/or key file seem to be broken. Ignoring ssl. Cert path: %s | Key path: %s' % (certfile_path, keyfile_path))
+                    web.app.logger.info(
+                        'The specified paths for the ssl certificate file and/or key file seem to be broken. '
+                        'Ignoring ssl. Cert path: %s | Key path: %s' % (
+                        certfile_path, keyfile_path))
             if os.name == 'nt':
-                self.wsgiserver= WSGIServer(('0.0.0.0', web.ub.config.config_port), web.app, spawn=Pool(), **ssl_args)
+                self.wsgiserver = WSGIServer(('0.0.0.0', web.ub.config.config_port), web.app, spawn=Pool(), **ssl_args)
             else:
                 self.wsgiserver = WSGIServer(('', web.ub.config.config_port), web.app, spawn=Pool(), **ssl_args)
             web.py3_gevent_link = self.wsgiserver
@@ -88,21 +91,23 @@ class server:
             try:
                 ssl = None
                 web.app.logger.info('Starting Tornado server')
-                certfile_path   = web.ub.config.get_config_certfile()
-                keyfile_path    = web.ub.config.get_config_keyfile()
+                certfile_path = web.ub.config.get_config_certfile()
+                keyfile_path = web.ub.config.get_config_keyfile()
                 if certfile_path and keyfile_path:
                     if os.path.isfile(certfile_path) and os.path.isfile(keyfile_path):
                         ssl = {"certfile": certfile_path,
                                "keyfile": keyfile_path}
                     else:
-                        web.app.logger.info('The specified paths for the ssl certificate file and/or key file seem to be broken. Ignoring ssl. Cert path: %s | Key path: %s' % (certfile_path, keyfile_path))
+                        web.app.logger.info(
+                            'The specified paths for the ssl certificate file and/or key file seem to be broken. Ignoring ssl. Cert path: %s | Key path: %s' % (
+                            certfile_path, keyfile_path))
 
                 # Max Buffersize set to 200MB
                 http_server = HTTPServer(WSGIContainer(web.app),
-                            max_buffer_size = 209700000,
-                            ssl_options=ssl)
+                                         max_buffer_size=209700000,
+                                         ssl_options=ssl)
                 http_server.listen(web.ub.config.config_port)
-                self.wsgiserver=IOLoop.instance()
+                self.wsgiserver = IOLoop.instance()
                 self.wsgiserver.start()
                 # wait for stop signal
                 self.wsgiserver.close(True)
@@ -130,7 +135,7 @@ class server:
             web.helper.global_WorkerThread.stop()
         sys.exit(0)
 
-    def setRestartTyp(self,starttyp):
+    def setRestartTyp(self, starttyp):
         self.restart = starttyp
         # ToDo: Somehow caused by circular import under python3 refactor
         web.py3_restart_Typ = starttyp
@@ -155,10 +160,10 @@ class server:
     @staticmethod
     def getNameVersion():
         if gevent_present:
-            return {'Gevent':'v'+geventVersion}
+            return {'Gevent': 'v' + geventVersion}
         else:
-            return {'Tornado':'v'+tornadoVersion}
+            return {'Tornado': 'v' + tornadoVersion}
 
 
 # Start Instance of Server
-Server=server()
+server = Server()

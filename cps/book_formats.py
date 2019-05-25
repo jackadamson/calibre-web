@@ -18,10 +18,13 @@
 #   along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import logging
-import uploader
 import os
 from flask_babel import gettext as _
-import comic
+from PIL import Image
+from PIL import __version__ as PILversion
+
+from cps import uploader
+from cps.features import comic, epub
 
 try:
     from lxml.etree import LXML_VERSION as lxmlversion
@@ -36,6 +39,7 @@ try:
     from wand.image import Image
     from wand import version as ImageVersion
     from wand.exceptions import PolicyError
+
     use_generic_pdf_cover = False
 except (ImportError, RuntimeError) as e:
     logger.warning('cannot import Image, generating pdf covers for pdf uploads will not work: %s', e)
@@ -43,31 +47,23 @@ except (ImportError, RuntimeError) as e:
 try:
     from PyPDF2 import PdfFileReader
     from PyPDF2 import __version__ as PyPdfVersion
+
     use_pdf_meta = True
 except ImportError as e:
     logger.warning('cannot import PyPDF2, extracting pdf metadata will not work: %s', e)
     use_pdf_meta = False
 
 try:
-    import epub
-    use_epub_meta = True
-except ImportError as e:
-    logger.warning('cannot import epub, extracting epub metadata will not work: %s', e)
-    use_epub_meta = False
-
-try:
     import fb2
+
     use_fb2_meta = True
 except ImportError as e:
     logger.warning('cannot import fb2, extracting fb2 metadata will not work: %s', e)
+    fb2 = None
     use_fb2_meta = False
 
-try:
-    from PIL import Image
-    from PIL import __version__ as PILversion
-    use_PIL = True
-except ImportError:
-    use_PIL = False
+use_PIL = True
+use_epub_meta = True
 
 
 def process(tmp_file_path, original_file_name, original_file_extension):
@@ -106,7 +102,6 @@ def default_meta(tmp_file_path, original_file_name, original_file_extension):
 
 
 def pdf_meta(tmp_file_path, original_file_name, original_file_extension):
-
     if use_pdf_meta:
         pdf = PdfFileReader(open(tmp_file_path, 'rb'), strict=False)
         doc_info = pdf.getDocumentInfo()
@@ -147,7 +142,7 @@ def pdf_preview(tmp_file_path, tmp_dir):
                 for obj in xObject:
                     if xObject[obj]['/Subtype'] == '/Image':
                         size = (xObject[obj]['/Width'], xObject[obj]['/Height'])
-                        data = xObject[obj]._data # xObject[obj].getData()
+                        data = xObject[obj]._data  # xObject[obj].getData()
                         if xObject[obj]['/ColorSpace'] == '/DeviceRGB':
                             mode = "RGB"
                         else:
@@ -191,6 +186,7 @@ def pdf_preview(tmp_file_path, tmp_dir):
             logger.warning('Cannot extract cover image, using default: %s', ex)
             return None
 
+
 def get_versions():
     if not use_generic_pdf_cover:
         IVersion = ImageVersion.MAGICK_VERSION
@@ -199,11 +195,11 @@ def get_versions():
         IVersion = _(u'not installed')
         WVersion = _(u'not installed')
     if use_pdf_meta:
-        PVersion='v'+PyPdfVersion
+        PVersion = 'v' + PyPdfVersion
     else:
-        PVersion=_(u'not installed')
+        PVersion = _(u'not installed')
     if lxmlversion:
-        XVersion = 'v'+'.'.join(map(str, lxmlversion))
+        XVersion = 'v' + '.'.join(map(str, lxmlversion))
     else:
         XVersion = _(u'not installed')
     if use_PIL:
@@ -212,6 +208,6 @@ def get_versions():
         PILVersion = _(u'not installed')
     return {'Image Magick': IVersion,
             'PyPdf': PVersion,
-            'lxml':XVersion,
+            'lxml': XVersion,
             'Wand': WVersion,
             'Pillow': PILVersion}

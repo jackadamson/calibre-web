@@ -27,11 +27,7 @@
 # IN ANY WAY OUT OF THE USE OF THIS SOFTWARE AND DOCUMENTATION, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 # http://flask.pocoo.org/snippets/62/
-
-try:
-    from urllib.parse import urlparse, urljoin
-except ImportError:
-    from urlparse import urlparse, urljoin
+from future.moves.urllib.parse import urlparse, urljoin
 from flask import request, url_for, redirect
 
 

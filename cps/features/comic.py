@@ -20,7 +20,7 @@
 import zipfile
 import tarfile
 import os
-import uploader
+from cps import uploader
 
 
 def extractCover(tmp_file_name, original_file_extension):

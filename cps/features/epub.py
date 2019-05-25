@@ -20,8 +20,8 @@
 import zipfile
 from lxml import etree
 import os
-import uploader
-import isoLanguages
+from cps import uploader
+from cps import isolanguages
 
 
 def extractCover(zipFile, coverFile, coverpath, tmp_file_name):
@@ -81,9 +81,9 @@ def get_epub_info(tmp_file_path, original_file_name, original_file_extension):
     else:
         lang = epub_metadata['language'].split('-', 1)[0].lower()
         if len(lang) == 2:
-            epub_metadata['language'] = isoLanguages.get(part1=lang).name
+            epub_metadata['language'] = isolanguages.get(part1=lang).name
         elif len(lang) == 3:
-            epub_metadata['language'] = isoLanguages.get(part3=lang).name
+            epub_metadata['language'] = isolanguages.get(part3=lang).name
         else:
             epub_metadata['language'] = ""
 
@@ -106,7 +106,8 @@ def get_epub_info(tmp_file_path, original_file_name, original_file_extension):
     else:
         meta_cover = tree.xpath("/pkg:package/pkg:metadata/pkg:meta[@name='cover']/@content", namespaces=ns)
         if len(meta_cover) > 0:
-            coversection = tree.xpath("/pkg:package/pkg:manifest/pkg:item[@id='"+meta_cover[0]+"']/@href", namespaces=ns)
+            coversection = tree.xpath("/pkg:package/pkg:manifest/pkg:item[@id='" + meta_cover[0] + "']/@href",
+                                      namespaces=ns)
             if len(coversection) > 0:
                 filetype = coversection[0].rsplit('.', 1)[-1]
                 if filetype == "xhtml" or filetype == "html":  # if cover is (x)html format
@@ -115,7 +116,8 @@ def get_epub_info(tmp_file_path, original_file_name, original_file_extension):
                     # no matter xhtml or html with no namespace
                     imgsrc = markupTree.xpath("//*[local-name() = 'img']/@src")
                     # imgsrc maybe startwith "../"" so fullpath join then relpath to cwd
-                    filename = os.path.relpath(os.path.join(os.path.dirname(os.path.join(coverpath, coversection[0])), imgsrc[0]))
+                    filename = os.path.relpath(
+                        os.path.join(os.path.dirname(os.path.join(coverpath, coversection[0])), imgsrc[0]))
                     coverfile = extractCover(epubZip, filename, "", tmp_file_path)
                 else:
                     coverfile = extractCover(epubZip, coversection[0], coverpath, tmp_file_path)

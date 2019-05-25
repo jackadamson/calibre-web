@@ -17,10 +17,8 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <http://www.gnu.org/licenses/>.
-
 from sqlalchemy import *
 from sqlalchemy import exc
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import *
 from flask_login import AnonymousUserMixin
 import sys
@@ -30,10 +28,11 @@ from werkzeug.security import generate_password_hash
 import json
 import datetime
 from binascii import hexlify
-import cli
-
+from cps import cli
+from cps.settings import DEFAULT_PASS, CALIBRE_PORT
+from cps.models.base import Base
 engine = create_engine('sqlite:///{0}'.format(cli.settingspath), echo=False)
-Base = declarative_base()
+
 
 ROLE_USER = 0
 ROLE_ADMIN = 1
@@ -44,7 +43,6 @@ ROLE_PASSWD = 16
 ROLE_ANONYMOUS = 32
 ROLE_EDIT_SHELFS = 64
 ROLE_DELETE_BOOKS = 128
-
 
 DETAIL_RANDOM = 1
 SIDEBAR_LANGUAGE = 2
@@ -60,18 +58,11 @@ SIDEBAR_SORTED = 1024
 MATURE_CONTENT = 2048
 SIDEBAR_PUBLISHER = 4096
 
-DEFAULT_PASS = "admin123"
-try:
-    DEFAULT_PORT = int(os.environ.get("CALIBRE_PORT", 8083))
-except ValueError:
-    print ('Environmentvariable CALIBRE_PORT is set to an invalid value: ' +
-           os.environ.get("CALIBRE_PORT", 8083) + ', faling back to default (8083)')
-    DEFAULT_PORT = 8083
-
 UPDATE_STABLE = 0
 AUTO_UPDATE_STABLE = 1
 UPDATE_NIGHTLY = 2
 AUTO_UPDATE_NIGHTLY = 4
+
 
 class UserBase:
 
@@ -92,7 +83,7 @@ class UserBase:
             return False
 
     def role_upload(self):
-        return bool((self.role is not None)and(self.role & ROLE_UPLOAD == ROLE_UPLOAD))
+        return bool((self.role is not None) and (self.role & ROLE_UPLOAD == ROLE_UPLOAD))
 
     def role_edit(self):
         if self.role is not None:
@@ -119,7 +110,7 @@ class UserBase:
             return False
 
     def role_delete_books(self):
-        return bool((self.role is not None)and(self.role & ROLE_DELETE_BOOKS == ROLE_DELETE_BOOKS))
+        return bool((self.role is not None) and (self.role & ROLE_DELETE_BOOKS == ROLE_DELETE_BOOKS))
 
     @property
     def is_active(self):
@@ -136,40 +127,41 @@ class UserBase:
         return self.default_language
 
     def show_random_books(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_RANDOM == SIDEBAR_RANDOM))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & SIDEBAR_RANDOM == SIDEBAR_RANDOM))
 
     def show_language(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_LANGUAGE == SIDEBAR_LANGUAGE))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & SIDEBAR_LANGUAGE == SIDEBAR_LANGUAGE))
 
     def show_hot_books(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_HOT == SIDEBAR_HOT))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & SIDEBAR_HOT == SIDEBAR_HOT))
 
     def show_recent(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_RECENT == SIDEBAR_RECENT))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & SIDEBAR_RECENT == SIDEBAR_RECENT))
 
     def show_sorted(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_SORTED == SIDEBAR_SORTED))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & SIDEBAR_SORTED == SIDEBAR_SORTED))
 
     def show_series(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_SERIES == SIDEBAR_SERIES))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & SIDEBAR_SERIES == SIDEBAR_SERIES))
 
     def show_category(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_CATEGORY == SIDEBAR_CATEGORY))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & SIDEBAR_CATEGORY == SIDEBAR_CATEGORY))
 
     def show_author(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_AUTHOR == SIDEBAR_AUTHOR))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & SIDEBAR_AUTHOR == SIDEBAR_AUTHOR))
 
     def show_publisher(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_PUBLISHER == SIDEBAR_PUBLISHER))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & SIDEBAR_PUBLISHER == SIDEBAR_PUBLISHER))
 
     def show_best_rated_books(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_BEST_RATED == SIDEBAR_BEST_RATED))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & SIDEBAR_BEST_RATED == SIDEBAR_BEST_RATED))
 
     def show_read_and_unread(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & SIDEBAR_READ_AND_UNREAD == SIDEBAR_READ_AND_UNREAD))
+        return bool((self.sidebar_view is not None) and (
+                self.sidebar_view & SIDEBAR_READ_AND_UNREAD == SIDEBAR_READ_AND_UNREAD))
 
     def show_detail_random(self):
-        return bool((self.sidebar_view is not None)and(self.sidebar_view & DETAIL_RANDOM == DETAIL_RANDOM))
+        return bool((self.sidebar_view is not None) and (self.sidebar_view & DETAIL_RANDOM == DETAIL_RANDOM))
 
     def __repr__(self):
         return '<User %r>' % self.nickname
@@ -198,14 +190,14 @@ class User(UserBase, Base):
 # anonymous user
 class Anonymous(AnonymousUserMixin, UserBase):
     def __init__(self):
-        self.loadSettings()
+        self.load_settings()
 
-    def loadSettings(self):
+    def load_settings(self):
         data = session.query(User).filter(User.role.op('&')(ROLE_ANONYMOUS) == ROLE_ANONYMOUS).first()  # type: User
         settings = session.query(Settings).first()
         self.nickname = data.nickname
         self.role = data.role
-        self.id=data.id
+        self.id = data.id
         self.sidebar_view = data.sidebar_view
         self.default_language = data.default_language
         self.locale = data.locale
@@ -310,7 +302,7 @@ class Settings(Base):
     mail_password = Column(String)
     mail_from = Column(String)
     config_calibre_dir = Column(String)
-    config_port = Column(Integer, default=DEFAULT_PORT)
+    config_port = Column(Integer, default=CALIBRE_PORT)
     config_certfile = Column(String)
     config_keyfile = Column(String)
     config_calibre_web_title = Column(String, default=u'Calibre-Web')
@@ -370,15 +362,37 @@ class Config:
             os.path.realpath(__file__)) + os.sep + ".." + os.sep))
         self.db_configured = None
         self.config_logfile = None
-        self.loadSettings()
+        self.config_calibre_dir = None
+        self.config_port = None
+        self.config_certfile = None
+        self.config_keyfile = None
+        self.config_calibre_web_title = None
+        self.config_books_per_page = None
+        self.config_random_books = None
+        self.config_authors_max = None
+        self.config_title_regex = None
+        self.config_read_column = None
+        self.config_log_level = None
+        self.config_uploading = None
+        self.config_anonbrowse = None
+        self.config_public_reg = None
+        self.config_default_role = None
+        self.config_default_show = None
+        self.config_columns_to_ignore = None
+        self.config_use_google_drive = None
+        self.config_google_drive_folder = None
+        self.config_ebookconverter = None
+        self.config_converterpath = None
+        self.config_calibre = None
+        self.load_settings()
 
-    def loadSettings(self):
+    def load_settings(self):
         data = session.query(Settings).first()  # type: Settings
 
         self.config_calibre_dir = data.config_calibre_dir
         self.config_port = data.config_port
         self.config_certfile = data.config_certfile
-        self.config_keyfile  = data.config_keyfile
+        self.config_keyfile = data.config_keyfile
         self.config_calibre_web_title = data.config_calibre_web_title
         self.config_books_per_page = data.config_books_per_page
         self.config_random_books = data.config_random_books
@@ -398,12 +412,14 @@ class Config:
         self.config_converterpath = data.config_converterpath
         self.config_calibre = data.config_calibre
         if data.config_google_drive_watch_changes_response:
-            self.config_google_drive_watch_changes_response = json.loads(data.config_google_drive_watch_changes_response)
+            self.config_google_drive_watch_changes_response = json.loads(
+                data.config_google_drive_watch_changes_response)
         else:
-            self.config_google_drive_watch_changes_response=None
+            self.config_google_drive_watch_changes_response = None
         self.config_columns_to_ignore = data.config_columns_to_ignore
         self.db_configured = bool(self.config_calibre_dir is not None and
-                (not self.config_use_google_drive or os.path.exists(self.config_calibre_dir + '/metadata.db')))
+                                  (not self.config_use_google_drive or os.path.exists(
+                                      self.config_calibre_dir + '/metadata.db')))
         self.config_remote_login = data.config_remote_login
         self.config_use_goodreads = data.config_use_goodreads
         self.config_goodreads_api_key = data.config_goodreads_api_key
@@ -546,11 +562,7 @@ class Config:
                     (self.config_default_show & MATURE_CONTENT == MATURE_CONTENT))
 
     def mature_content_tags(self):
-        if sys.version_info > (3, 0): # Python3 str, Python2 unicode
-            lstrip = str.lstrip
-        else:
-            lstrip = unicode.lstrip
-        return list(map(lstrip, self.config_mature_content_tags.split(",")))
+        return list(map(str.lstrip, self.config_mature_content_tags.split(",")))
 
     def get_Log_Level(self):
         ret_value = ""
@@ -639,11 +651,11 @@ def migrate_Database():
     except exc.OperationalError:
         conn = engine.connect()
         conn.execute("UPDATE user SET 'sidebar_view' = (random_books* :side_random + language_books * :side_lang "
-            "+ series_books * :side_series + category_books * :side_category + hot_books * "
-            ":side_hot + :side_autor + :detail_random)"
-            ,{'side_random': SIDEBAR_RANDOM, 'side_lang': SIDEBAR_LANGUAGE, 'side_series': SIDEBAR_SERIES,
-            'side_category': SIDEBAR_CATEGORY, 'side_hot': SIDEBAR_HOT, 'side_autor': SIDEBAR_AUTHOR,
-            'detail_random': DETAIL_RANDOM})
+                     "+ series_books * :side_series + category_books * :side_category + hot_books * "
+                     ":side_hot + :side_autor + :detail_random)"
+                     , {'side_random': SIDEBAR_RANDOM, 'side_lang': SIDEBAR_LANGUAGE, 'side_series': SIDEBAR_SERIES,
+                        'side_category': SIDEBAR_CATEGORY, 'side_hot': SIDEBAR_HOT, 'side_autor': SIDEBAR_AUTHOR,
+                        'detail_random': DETAIL_RANDOM})
         session.commit()
     try:
         session.query(exists().where(User.mature_content)).scalar()
@@ -716,7 +728,6 @@ def migrate_Database():
         conn.execute("ALTER TABLE Settings ADD column `config_updatechannel` INTEGER DEFAULT 0")
         session.commit()
 
-
     # Remove login capability of user Guest
     conn = engine.connect()
     conn.execute("UPDATE user SET password='' where nickname = 'Guest' and password !=''")
@@ -759,20 +770,23 @@ def get_mail_settings():
 
     return data
 
+
 # Save downloaded books per user in calibre-web's own database
 def update_download(book_id, user_id):
     check = session.query(Downloads).filter(Downloads.user_id == user_id).filter(Downloads.book_id ==
-                                                                                          book_id).first()
+                                                                                 book_id).first()
 
     if not check:
         new_download = Downloads(user_id=user_id, book_id=book_id)
         session.add(new_download)
         session.commit()
 
+
 # Delete non exisiting downloaded books in calibre-web's own database
 def delete_download(book_id):
     session.query(Downloads).filter(book_id == Downloads.book_id).delete()
     session.commit()
+
 
 # Generate user Guest (translated text), as anoymous user, no rights
 def create_anonymous_user():
@@ -795,8 +809,8 @@ def create_admin_user():
     user.nickname = "admin"
     user.role = ROLE_USER + ROLE_ADMIN + ROLE_DOWNLOAD + ROLE_UPLOAD + ROLE_EDIT + ROLE_DELETE_BOOKS + ROLE_PASSWD
     user.sidebar_view = DETAIL_RANDOM + SIDEBAR_LANGUAGE + SIDEBAR_SERIES + SIDEBAR_CATEGORY + SIDEBAR_HOT + \
-            SIDEBAR_RANDOM + SIDEBAR_AUTHOR + SIDEBAR_BEST_RATED + SIDEBAR_READ_AND_UNREAD + SIDEBAR_RECENT + \
-            SIDEBAR_SORTED + MATURE_CONTENT + SIDEBAR_PUBLISHER
+                        SIDEBAR_RANDOM + SIDEBAR_AUTHOR + SIDEBAR_BEST_RATED + SIDEBAR_READ_AND_UNREAD + SIDEBAR_RECENT + \
+                        SIDEBAR_SORTED + MATURE_CONTENT + SIDEBAR_PUBLISHER
 
     user.password = generate_password_hash(DEFAULT_PASS)
 

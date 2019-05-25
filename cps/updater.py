@@ -20,21 +20,19 @@
 import threading
 import zipfile
 import requests
-import re
 import logging
-import server
 import time
 from io import BytesIO
 import os
 import sys
 import shutil
-from ub import config, UPDATE_STABLE
 from tempfile import gettempdir
 import datetime
 import json
 from flask_babel import gettext as _
 from babel.dates import format_datetime
-import web
+from cps import server, web
+from cps.models.ub import config, UPDATE_STABLE
 
 
 def is_sha1(sha1):

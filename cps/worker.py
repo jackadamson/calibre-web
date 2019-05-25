@@ -17,7 +17,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import smtplib
 import threading
 from datetime import datetime
@@ -27,14 +27,14 @@ import socket
 import sys
 import os
 from email.generator import Generator
-import web
 from flask_babel import gettext as _
 import re
-import gdriveutils as gd
 import subprocess
+from cps import web
+from cps.features import gdriveutils as gd
 
 try:
-    from StringIO import StringIO
+    import StringIO
     from email.MIMEBase import MIMEBase
     from email.MIMEMultipart import MIMEMultipart
     from email.MIMEText import MIMEText
@@ -54,7 +54,7 @@ STAT_WAITING = 0
 STAT_FAIL = 1
 STAT_STARTED = 2
 STAT_FINISH_SUCCESS = 3
-#taskType consts
+# taskType consts
 TASK_EMAIL = 1
 TASK_CONVERT = 2
 TASK_UPLOAD = 3
@@ -88,7 +88,7 @@ def get_attachment(bookpath, filename):
             data = file_.read()
             file_.close()
         except IOError as e:
-            web.app.logger.exception(e) # traceback.print_exc()
+            web.app.logger.exception(e)  # traceback.print_exc()
             web.app.logger.error(u'The requested file could not be read. Maybe wrong permissions?')
             return None
 
@@ -102,7 +102,6 @@ def get_attachment(bookpath, filename):
 
 # Class for sending email with ability to get current progress
 class emailbase():
-
     transferSize = 0
     progress = 0
 
@@ -119,13 +118,13 @@ class emailbase():
         if hasattr(self, 'sock') and self.sock:
             try:
                 if self.transferSize:
-                    lock=threading.Lock()
+                    lock = threading.Lock()
                     lock.acquire()
                     self.transferSize = len(strg)
                     lock.release()
                     for i in range(0, self.transferSize, chunksize):
                         if isinstance(strg, bytes):
-                            self.sock.send((strg[i:i+chunksize]))
+                            self.sock.send((strg[i:i + chunksize]))
                         else:
                             self.sock.send((strg[i:i + chunksize]).encode('utf-8'))
                         lock.acquire()
@@ -143,7 +142,7 @@ class emailbase():
         if self.transferSize:
             lock2 = threading.Lock()
             lock2.acquire()
-            value = int((float(self.progress) / float(self.transferSize))*100)
+            value = int((float(self.progress) / float(self.transferSize)) * 100)
             lock2.release()
             return str(value) + ' %'
         else:
@@ -164,7 +163,7 @@ class email_SSL(emailbase, smtplib.SMTP_SSL):
         smtplib.SMTP_SSL.__init__(self, *args, **kwargs)
 
 
-#Class for all worker tasks in the background
+# Class for all worker tasks in the background
 class WorkerThread(threading.Thread):
 
     def __init__(self):
@@ -175,7 +174,7 @@ class WorkerThread(threading.Thread):
         self.last = 0
         self.queue = list()
         self.UIqueue = list()
-        self.asyncSMTP=None
+        self.asyncSMTP = None
         self.id = 0
 
     # Main thread loop starting the different tasks
@@ -217,12 +216,12 @@ class WorkerThread(threading.Thread):
         self.last = len(self.queue)
 
     def get_taskstatus(self):
-        if self.current  < len(self.queue):
+        if self.current < len(self.queue):
             if self.UIqueue[self.current]['stat'] == STAT_STARTED:
                 if self.queue[self.current]['taskType'] == TASK_EMAIL:
                     self.UIqueue[self.current]['progress'] = self.get_send_status()
                 self.UIqueue[self.current]['runtime'] = self._formatRuntime(
-                                                        datetime.now() - self.queue[self.current]['starttime'])
+                    datetime.now() - self.queue[self.current]['starttime'])
         return self.UIqueue
 
     def _convert_any_format(self):
@@ -237,9 +236,9 @@ class WorkerThread(threading.Thread):
                 gd.updateGdriveCalibreFromLocal()
             if curr_task == TASK_CONVERT:
                 self.add_email(self.queue[self.current]['settings']['subject'], self.queue[self.current]['path'],
-                                filename, self.queue[self.current]['settings'], self.queue[self.current]['kindle'],
-                                self.UIqueue[self.current]['user'], self.queue[self.current]['title'],
-                                self.queue[self.current]['settings']['body'])
+                               filename, self.queue[self.current]['settings'], self.queue[self.current]['kindle'],
+                               self.UIqueue[self.current]['user'], self.queue[self.current]['title'],
+                               self.queue[self.current]['settings']['body'])
 
     def _convert_ebook_format(self):
         error_message = None
@@ -259,7 +258,8 @@ class WorkerThread(threading.Thread):
             self._handleSuccess()
             return file_path + format_new_ext
         else:
-            web.app.logger.info("Book id %d - target format of %s does not exist. Moving forward with convert.", bookid, format_new_ext)
+            web.app.logger.info("Book id %d - target format of %s does not exist. Moving forward with convert.", bookid,
+                                format_new_ext)
 
         # check if converter-executable is existing
         if not os.path.exists(web.ub.config.config_converterpath):
@@ -356,7 +356,6 @@ class WorkerThread(threading.Thread):
         self._handleError(error_message)
         return
 
-
     def add_convert(self, file_path, bookid, user_name, taskMessage, settings, kindle_mail=None):
         addLock = threading.Lock()
         addLock.acquire()
@@ -367,12 +366,12 @@ class WorkerThread(threading.Thread):
         task = TASK_CONVERT_ANY
         if kindle_mail:
             task = TASK_CONVERT
-        self.queue.append({'file_path':file_path, 'bookid':bookid, 'starttime': 0, 'kindle': kindle_mail,
-                           'taskType': task, 'settings':settings})
+        self.queue.append({'file_path': file_path, 'bookid': bookid, 'starttime': 0, 'kindle': kindle_mail,
+                           'taskType': task, 'settings': settings})
         self.UIqueue.append({'user': user_name, 'formStarttime': '', 'progress': " 0 %", 'taskMess': taskMessage,
-                             'runtime': '0 s', 'stat': STAT_WAITING,'id': self.id, 'taskType': task } )
+                             'runtime': '0 s', 'stat': STAT_WAITING, 'id': self.id, 'taskType': task})
 
-        self.last=len(self.queue)
+        self.last = len(self.queue)
         addLock.release()
 
     def add_email(self, subject, filepath, attachment, settings, recipient, user_name, taskMessage,
@@ -384,12 +383,12 @@ class WorkerThread(threading.Thread):
             self._delete_completed_tasks()
         # progress, runtime, and status = 0
         self.id += 1
-        self.queue.append({'subject':subject, 'attachment':attachment, 'filepath':filepath,
-                           'settings':settings, 'recipent':recipient, 'starttime': 0,
-                           'taskType': TASK_EMAIL, 'text':text})
+        self.queue.append({'subject': subject, 'attachment': attachment, 'filepath': filepath,
+                           'settings': settings, 'recipent': recipient, 'starttime': 0,
+                           'taskType': TASK_EMAIL, 'text': text})
         self.UIqueue.append({'user': user_name, 'formStarttime': '', 'progress': " 0 %", 'taskMess': taskMessage,
-                             'runtime': '0 s', 'stat': STAT_WAITING,'id': self.id, 'taskType': TASK_EMAIL })
-        self.last=len(self.queue)
+                             'runtime': '0 s', 'stat': STAT_WAITING, 'id': self.id, 'taskType': TASK_EMAIL})
+        self.last = len(self.queue)
         addLock.release()
 
     def add_upload(self, user_name, taskMessage):
@@ -402,18 +401,17 @@ class WorkerThread(threading.Thread):
         self.id += 1
         self.queue.append({'starttime': datetime.now(), 'taskType': TASK_UPLOAD})
         self.UIqueue.append({'user': user_name, 'formStarttime': '', 'progress': "100 %", 'taskMess': taskMessage,
-                             'runtime': '0 s', 'stat': STAT_FINISH_SUCCESS,'id': self.id, 'taskType': TASK_UPLOAD})
+                             'runtime': '0 s', 'stat': STAT_FINISH_SUCCESS, 'id': self.id, 'taskType': TASK_UPLOAD})
         self.UIqueue[self.current]['formStarttime'] = self.queue[self.current]['starttime']
-        self.last=len(self.queue)
+        self.last = len(self.queue)
         addLock.release()
-
 
     def _send_raw_email(self):
         self.queue[self.current]['starttime'] = datetime.now()
         self.UIqueue[self.current]['formStarttime'] = self.queue[self.current]['starttime']
         # self.queue[self.current]['status'] = STAT_STARTED
         self.UIqueue[self.current]['stat'] = STAT_STARTED
-        obj=self.queue[self.current]
+        obj = self.queue[self.current]
         # create MIME message
         msg = MIMEMultipart()
         msg['Subject'] = self.queue[self.current]['subject']
@@ -470,7 +468,7 @@ class WorkerThread(threading.Thread):
             return None
         except (smtplib.SMTPException, smtplib.SMTPAuthenticationError) as e:
             if hasattr(e, "smtp_error"):
-                text = e.smtp_error.decode('utf-8').replace("\n",'. ')
+                text = e.smtp_error.decode('utf-8').replace("\n", '. ')
             elif hasattr(e, "message"):
                 text = e.message
             else:
@@ -498,7 +496,7 @@ class WorkerThread(threading.Thread):
         self.UIqueue[self.current]['stat'] = STAT_FAIL
         self.UIqueue[self.current]['progress'] = "100 %"
         self.UIqueue[self.current]['runtime'] = self._formatRuntime(
-                                                datetime.now() - self.queue[self.current]['starttime'])
+            datetime.now() - self.queue[self.current]['starttime'])
         self.UIqueue[self.current]['message'] = error_message
 
     def _handleSuccess(self):
@@ -510,7 +508,6 @@ class WorkerThread(threading.Thread):
 
 # Enable logging of smtp lib debug output
 class StderrLogger(object):
-
     buffer = ''
 
     def __init__(self):
@@ -526,4 +523,3 @@ class StderrLogger(object):
                 self.buffer += message
         except:
             pass
-

@@ -31,7 +31,7 @@ Calibre-Web is a web app providing a clean interface for browsing, reading and d
 ## Quick start
 
 1. Install dependencies by running `pip install --target vendor -r requirements.txt`.
-2. Execute the command: `python cps.py` (or `nohup python cps.py` - recommended if you want to exit the terminal window)
+2. Execute the command: `python -m cps`
 3. Point your browser to `http://localhost:8083` or `http://localhost:8083/opds` for the OPDS catalog
 4. Set `Location of Calibre database` to the path of the folder where your Calibre library (metadata.db) lives, push "submit" button\
    Optionally a Google Drive can be used to host the calibre library [-> Using Google Drive integration](https://github.com/janeczku/calibre-web/wiki/Configuration#using-google-drive-integration)

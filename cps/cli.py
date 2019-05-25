@@ -23,15 +23,18 @@ import os
 import sys
 
 parser = argparse.ArgumentParser(description='Calibre Web is a web app'
-                    ' providing a interface for browsing, reading and downloading eBooks\n', prog='cps.py')
+                                             ' providing a interface for browsing, reading and downloading eBooks\n',
+                                 prog='cps.py')
 parser.add_argument('-p', metavar='path', help='path and name to settings db, e.g. /opt/cw.db')
 parser.add_argument('-g', metavar='path', help='path and name to gdrive db, e.g. /opt/gd.db')
-parser.add_argument('-c', metavar='path', help='path and name to SSL certfile, e.g. /opt/test.cert, works only in combination with keyfile')
-parser.add_argument('-k', metavar='path', help='path and name to SSL keyfile, e.g. /opt/test.key, works only in combination with certfile')
+parser.add_argument('-c', metavar='path',
+                    help='path and name to SSL certfile, e.g. /opt/test.cert, works only in combination with keyfile')
+parser.add_argument('-k', metavar='path',
+                    help='path and name to SSL keyfile, e.g. /opt/test.key, works only in combination with certfile')
 args = parser.parse_args()
 
 generalPath = os.path.normpath(os.getenv("CALIBRE_DBPATH",
-                        os.path.dirname(os.path.realpath(__file__)) + os.sep + ".." + os.sep))
+                                         os.path.dirname(os.path.realpath(__file__)) + os.sep + ".." + os.sep))
 if args.p:
     settingspath = args.p
 else:
